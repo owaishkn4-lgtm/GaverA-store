@@ -153,11 +153,50 @@ document.getElementById('checkoutForm')?.addEventListener('submit', async e => {
   const submitBtn = document.getElementById('placeOrderBtn');
   if (!storeCart.length) { result.textContent = 'Your bag is empty. Add a product before checkout.'; return; }
   if (customer.payment !== 'razorpay') {
-    const order = { orderId: 'GAV-' + Date.now().toString().slice(-7), customer, items: storeCart.map(x => ({...x})), createdAt: new Date().toISOString(), status: 'Demo COD request — not sent to a server' };
-    const orders = JSON.parse(localStorage.getItem('gaveraDemoOrdersV1') || '[]');
-    orders.push(order); localStorage.setItem('gaveraDemoOrdersV1', JSON.stringify(orders));
-    result.textContent = 'Demo COD request ' + order.orderId + ' saved only in this browser. No owner notification or real order processing is configured.';
-    storeCart = []; saveStore(); renderCart(); formEl.reset(); return;
+    
+if (customer.payment !== 'razorpay') {
+  submitBtn.disabled = true;
+  const originalText = submitBtn.textContent;
+  submitBtn.textContent = 'Submitting order...';
+  result.textContent = 'Saving your order securely...';
+
+  try {
+    const response = await fetch('/.netlify/functions/submit-order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        customer,
+        items: storeCart.map(({ id, qty, size, color }) => ({
+          id, qty, size, color
+        }))
+      })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || !data.success) {
+      throw new Error(data.error || 'Order could not be submitted.');
+    }
+
+    result.textContent =
+      'Order received! Your order number is ' + data.orderNumber +
+      '. Please keep this number for reference.';
+
+    storeCart = [];
+    saveStore();
+    renderCart();
+    formEl.reset();
+
+  } catch (error) {
+    result.textContent = error.message || 'Order submission failed. Please try again.';
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = originalText;
+  }
+
+  return;
+}
+
   }
   if (typeof window.Razorpay !== 'function') { result.textContent = 'Razorpay Checkout did not load. Check your internet connection and try again.'; return; }
   submitBtn.disabled = true; const originalText = submitBtn.textContent; submitBtn.textContent = 'Preparing secure payment…'; result.textContent = 'Creating your secure payment order…';
